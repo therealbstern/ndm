@@ -120,7 +120,7 @@ let roll_set: RollSet = "3d6".parse().unwrap();
 ```
 
 `RollSet`s can contain any combinations of valid `Dice` and whole numbers,
-joined by `+` or `-` (or &#x2122;).  These combinations can also be multiplied
+joined by `+` or `-` (or &#x2212;).  These combinations can also be multiplied
 by floating-point numbers, using `*` (or `x` or `X` or &times;).
 
 ```rust
