@@ -1,6 +1,6 @@
 [package]
 name = "ndm"
-version = "0.9.0"
+version = "0.9.1"
 authors = ["Ben Stern <bstern@kukaret.com>"]
 edition = "2018"
 description = "Parse standard polyhedral dice notation"
