@@ -3,6 +3,7 @@
 
 #![forbid(unsafe_code)]
 
+use std::cmp::Ordering;
 use std::convert::TryFrom;
 use std::error::Error;
 use std::fmt::{Display, Debug, Error as FmtError, Formatter};
@@ -137,18 +138,20 @@ impl Dice {
                 if keep != 0 {
                     rolls.sort_unstable();
                 }
-                let range = if keep < 0 {
-                    if rolls.len() < (-keep) as usize {
-                        return Err(DiceParseError::TooManyKept(keep));
-                    }
-                    0 .. (-keep as usize)
-                } else if keep > 0 {
-                    if rolls.len() < keep as usize {
-                        return Err(DiceParseError::TooManyKept(keep));
-                    }
-                    rolls.len() - (keep as usize) .. rolls.len()
-                } else {
-                    0 .. rolls.len()
+                let range = match keep.cmp(&0) {
+                    Ordering::Less => {
+                        if rolls.len() < (-keep) as usize {
+                            return Err(DiceParseError::TooManyKept(keep));
+                        }
+                        0 .. (-keep as usize)
+                    },
+                    Ordering::Greater => {
+                        if rolls.len() < keep as usize {
+                            return Err(DiceParseError::TooManyKept(keep));
+                        }
+                        rolls.len() - (keep as usize) .. rolls.len()
+                    },
+                    Ordering::Equal => 0 .. rolls.len(),
                 };
 
                 rolls[range].iter().map(|&x| x as i32).sum()
@@ -213,7 +216,7 @@ impl FromStr for Dice {
 
     fn from_str(line: &str) -> Result<Self, Self::Err> {
         let mut caps = DICE_RE.captures_iter(&line);
-        let word = caps.next().ok_or_else(|| DiceParseError::Unparseable)?;
+        let word = caps.next().ok_or(DiceParseError::Unparseable)?;
         Dice::try_from(word)
     }
 }
@@ -223,13 +226,13 @@ impl TryFrom<Captures<'_>> for Dice {
 
     fn try_from(cap: Captures) -> Result<Self, Self::Error> {
         let count = cap.name("count")
-            .and_then(|m| Some(m.as_str()))
+            .map(|m| m.as_str())
             .unwrap_or("1")
             .parse::<usize>().map_err(|_| DiceParseError::Unparseable)?;
 
         let sides_s = cap.name("sides")
-            .and_then(|m| Some(m.as_str()))
-            .ok_or_else(|| DiceParseError::Regex)?;
+            .map(|m| m.as_str())
+            .ok_or(DiceParseError::Regex)?;
         let sides = if sides_s.to_lowercase() == "f" {
             0
         } else {
@@ -254,8 +257,7 @@ impl TryFrom<Captures<'_>> for Dice {
         //};
 
         let keep = if let Some(updown) = cap.name("updown") {
-            let amt = cap.name("amount")
-                .ok_or_else(|| DiceParseError::Regex)?
+            let amt = cap.name("amount").ok_or(DiceParseError::Regex)?
                 .as_str()
                 .parse::<isize>().map_err(|_| DiceParseError::Unparseable)?;
             match &*updown.as_str().to_lowercase() {
