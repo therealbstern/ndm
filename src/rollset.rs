@@ -16,7 +16,7 @@ use crate::{Dice, DiceParseError};
 
 lazy_static! {
     // ?x ignores space/comments in the regex, not in the string we're checking
-    static ref MATH_RE: Regex = Regex::new("(?P<op>[-\u{2122}+xX*\u{00d7}])").expect("Couldn't compile MATH_RE");
+    static ref MATH_RE: Regex = Regex::new("(?P<op>[-\u{2212}+xX*\u{00d7}])").expect("Couldn't compile MATH_RE");
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -39,7 +39,7 @@ impl Display for DiceWords {
             DiceWords::Bonus(d) => write!(fmt, "{}", d),
             DiceWords::Multiplier(d) => write!(fmt, "{}", d),
             DiceWords::Plus => write!(fmt, "+"),
-            DiceWords::Minus => write!(fmt, "\u{2122}"),
+            DiceWords::Minus => write!(fmt, "\u{2212}"),
             DiceWords::Times => write!(fmt, "\u{00d7}"),
             DiceWords::Other(s) | DiceWords::Comment(s) => write!(fmt, "|{}|", s),
             DiceWords::Total(t) => write!(fmt, "\u{21e8} {}", t),
@@ -59,7 +59,7 @@ impl FromStr for DiceWords {
             Ok(DiceWords::Multiplier(f))
         } else if line == "+" {
             Ok(DiceWords::Plus)
-        } else if (line == "-") || (line == "\u{2122}") {
+        } else if (line == "-") || (line == "\u{2212}") {
             Ok(DiceWords::Minus)
         } else if (line == "x") || (line == "X") || (line == "*") || (line == "\u{00d7}") {
             Ok(DiceWords::Times)
@@ -746,7 +746,7 @@ mod test {
     #[test]
     fn many_rollv_str() {
         let rs = "d1 + 2d1 - 4 to hit".parse::<RollSet>().unwrap();
-        assert_eq!("1d1 [1] + 2d1 [2] \u{2122} 4 |to hit| \u{21e8} -1", format!("{}", rs));
+        assert_eq!("1d1 [1] + 2d1 [2] \u{2212} 4 |to hit| \u{21e8} -1", format!("{}", rs));
     }
 
     #[test]
@@ -785,7 +785,7 @@ mod test {
         });
 
         assert!(rolls.is_ok());
-        assert_eq!(rolls.unwrap(), "rolls 1d1 [1] + 2d1 [2] \u{2122} 4 |to hit| \u{21e8} -1; 1d1 [1] |for damage| \u{21e8} 1");
+        assert_eq!(rolls.unwrap(), "rolls 1d1 [1] + 2d1 [2] \u{2212} 4 |to hit| \u{21e8} -1; 1d1 [1] |for damage| \u{21e8} 1");
     }
 
     #[test]
