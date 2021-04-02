@@ -42,7 +42,7 @@ impl Display for DiceWords {
             DiceWords::Minus => write!(fmt, "\u{2212}"),
             DiceWords::Times => write!(fmt, "\u{00d7}"),
             DiceWords::Other(s) | DiceWords::Comment(s) => write!(fmt, "|{}|", s),
-            DiceWords::Total(t) => write!(fmt, "\u{21e8} {}", t),
+            DiceWords::Total(t) => write!(fmt, "= {}", t),
         }
     }
 }
@@ -736,35 +736,32 @@ mod test {
 
     #[test]
     fn add_constant_str() {
-        let rsr = "d1+4".parse::<RollSet>();
-        assert!(rsr.is_ok());
-
-        let rs = rsr.unwrap();
-        assert_eq!("1d1 [1] + 4 \u{21e8} 5".to_string(), format!("{}", rs));
+        let rs = "d1+4".parse::<RollSet>().unwrap();
+        assert_eq!("1d1 [1] + 4 = 5".to_string(), format!("{}", rs));
     }
 
     #[test]
     fn many_rollv_str() {
         let rs = "d1 + 2d1 - 4 to hit".parse::<RollSet>().unwrap();
-        assert_eq!("1d1 [1] + 2d1 [2] \u{2212} 4 |to hit| \u{21e8} -1", format!("{}", rs));
+        assert_eq!("1d1 [1] + 2d1 [2] \u{2212} 4 |to hit| = -1", format!("{}", rs));
     }
 
     #[test]
     fn multiply_even() {
         let rs = "10d1*1.5".parse::<RollSet>().unwrap();
-        assert_eq!("10d1 [10] \u{00d7} 1.5 \u{21e8} 15", format!("{}", rs));
+        assert_eq!("10d1 [10] \u{00d7} 1.5 = 15", format!("{}", rs));
     }
 
     #[test]
     fn multiply_odd() {
         let rs = "11d1*1.5".parse::<RollSet>().unwrap();
-        assert_eq!("11d1 [11] \u{00d7} 1.5 \u{21e8} 16", format!("{}", rs));
+        assert_eq!("11d1 [11] \u{00d7} 1.5 = 16", format!("{}", rs));
     }
 
     #[test]
     fn multiply_ooo() {
         let rs = "1d1*1.5 + 1d1 * 1.5".parse::<RollSet>().unwrap();
-        assert_eq!("1d1 [1] \u{00d7} 1.5 + 1d1 [1] \u{00d7} 1.5 \u{21e8} 3", format!("{}", rs));
+        assert_eq!("1d1 [1] \u{00d7} 1.5 + 1d1 [1] \u{00d7} 1.5 = 3", format!("{}", rs));
         // vs (1 * 1.5 = 1) + (1 * 1.5 = 1) = 2
     }
 
@@ -785,7 +782,7 @@ mod test {
         });
 
         assert!(rolls.is_ok());
-        assert_eq!(rolls.unwrap(), "rolls 1d1 [1] + 2d1 [2] \u{2212} 4 |to hit| \u{21e8} -1; 1d1 [1] |for damage| \u{21e8} 1");
+        assert_eq!(rolls.unwrap(), "rolls 1d1 [1] + 2d1 [2] \u{2212} 4 |to hit| = -1; 1d1 [1] |for damage| = 1");
     }
 
     #[test]
@@ -802,16 +799,16 @@ mod test {
 
     #[test]
     fn comment() {
-        assert_eq!(format!("{}", "4d1 # foo".parse::<RollSet>().unwrap()), "4d1 [4] \u{21e8} 4 |# foo|");
+        assert_eq!(format!("{}", "4d1 # foo".parse::<RollSet>().unwrap()), "4d1 [4] = 4 |# foo|");
     }
 
 //#[test]
 //    fn multi_roll() {
-//        assert_eq!(join_rolls("4d1; 2d1"), "rolls 4d1 [4] \u{21e8} 4; 2d1 [2] = 2");
+//        assert_eq!(join_rolls("4d1; 2d1"), "rolls 4d1 [4] = 4; 2d1 [2] = 2");
 //    }
 
 //#[test]
 //    fn multi_roll_comment() {
-//        assert_eq!(join_rolls("4d1 # foo; 2d1"), "rolls 4d1 [4] \u{21e8} 4 # foo; 2d1 [2] \u{21e8} 2");
+//        assert_eq!(join_rolls("4d1 # foo; 2d1"), "rolls 4d1 [4] = 4 # foo; 2d1 [2] = 2");
 //    }
 }
