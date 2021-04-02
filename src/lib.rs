@@ -208,7 +208,7 @@
 //!   - Otherwise, it defaults to the highest possible roll for the die
 //!
 //! Dice can be added with `+`, subtracted with `-` [or &minus;], or multiplied
-//! with `*` [or `x` or &times;].  Other text is treated as comments.
+//! with `*` [or `x` or `X` or &times;].  Other text is treated as comments.
 //!
 //! [Dice] can be combined with each other by addition or subtraction.  You can
 //! also add or subtract whole numbers and multiply results by floating point
