@@ -1,11 +1,15 @@
 [package]
 name = "ndm"
+readme = "README.md"
+keywords = ["dice", "gamedev", "random"]
+categories = ["command-line-utilities", "game-development"]
 version = "0.9.2"
 authors = ["Ben Stern <bstern@kukaret.com>"]
 edition = "2018"
 description = "Parse standard polyhedral dice notation"
 repository = "https://github.com/therealbstern/ndm"
 license = "MIT/Apache-2.0"
+documentation = "https://docs.rs/ndm"
 
 [dependencies]
 rand = "0.8"
