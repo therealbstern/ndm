@@ -199,7 +199,7 @@
 //! - `count` is the number of dice to roll, is optional, and defaults to 1
 //! - `sides` is the number of sides on the dice and is required
 //!   - If numeric, it must be non-negative
-//!   - `f` or `F` may be used to represent Fudge/Fate dice
+//!   - `f` or `F` may be used to represent [Fudge/Fate](https://en.wikipedia.org/wiki/Fudge_(role-playing_game_system)#Fudge_dice) dice
 //! - Optionally, `/`, followed by
 //!   - `H` (or `h`) or `L` (or `l`) and
 //!   - a positive number less than or equal to the number of dice rolled

@@ -26,8 +26,13 @@ lazy_static! {
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum DiceParseError {
+    /// An attempt was made to create zero dice.
+    ZeroCount,
     /// A fuse of 1 was provided; such a fuse would always explode.
     ShortFuse,
+    /// An impossible fuse was provided; such a fuse would never explode and
+    /// indicates a logic error.
+    LongFuse(u16),
     /// More dice were kept than rolled.
     TooManyKept(isize),
     /// Fate dice and d1s can't explode.
@@ -76,38 +81,114 @@ impl Dice {
     /// reason.
     pub const SIDES_LIMIT: u16 = 1000;
 
+    /// Roll (simple) dice.  Dice are rolled at creation time and not
+    /// otherwise modified.
+    ///
+    /// - `n` is the number of dice and must be non-zero
+    /// - `m` is the number of sides; zero (0) is treated as a request to create [Fudge/Fate](https://en.wikipedia.org/wiki/Fudge_(role-playing_game_system)#Fudge_dice) dice
+    ///
+    /// Dice created this way don't explode and are all kept.
+    ///
+    /// ```
+    /// use ndm::Dice;
+    ///
+    /// // create 1d6
+    /// let d6 = Dice::new(1, 6);
+    /// ```
     pub fn new(n: usize, m: u16) -> Result<Self, DiceParseError> {
         Dice::new_extended(n, m, 0, 0)
     }
 
+    /// Roll "exploding" dice.  Dice are rolled at creation time and not
+    /// otherwise modified.
+    ///
+    /// Any die which is rolls a value greater than or
+    /// equal to `fuse` will be added to the total and rolled again.
+    ///
+    /// Dice created this way are all kept.
+    ///
+    /// One-sided dice can't explode, because if they did, they would never
+    /// stop.  [Fudge/Fate](https://en.wikipedia.org/wiki/Fudge_(role-playing_game_system)#Fudge_dice)
+    /// dice can't explode either, because it doesn't make sense for them to.
+    ///
+    /// ```
+    /// use ndm::Dice;
+    ///
+    /// // create 1d6
+    /// let d6_explode_5 = Dice::new_exploding(1, 6, 5);
+    /// ```
     pub fn new_exploding(count: usize, sides: u16, fuse: u16) -> Result<Self, DiceParseError> {
         Dice::new_extended(count, sides, 0, fuse)
     }
 
+    /// Roll dice, adding only the highest or lowest `n` rolls to the total.
+    /// Dice are rolled at creation time and not otherwise modified.
+    ///
+    /// If `n` < 0, the `n` lowest dice are kept.  If `n` > 0, the `n` highest
+    /// dice are kept.  If `n` == 0, all dice are kept.
+    ///
+    /// Dice created this way don't explode.
+    ///
+    /// ```
+    /// use ndm::Dice;
+    ///
+    /// // Roll 4 six-sided dice, keeping the highest 3.
+    /// let wis = Dice::new_keep_n(4, 6, 3);
+    /// // Roll 2 twenty-sided dice, keeping the lower roll.
+    /// let disadvantage = Dice::new_keep_n(2, 20, -1);
+    /// ```
     pub fn new_keep_n(count: usize, sides: u16, n: isize) -> Result<Self, DiceParseError> {
         Dice::new_extended(count, sides, n, 0)
     }
 
+    /// Roll dice which may explode and optionally use some of the dice
+    /// when calculating the total.
+    /// Dice are rolled at creation time and not otherwise modified.
+    ///
+    /// If `keep` < 0, the `keep` lowest dice are kept.  If `keep` > 0, the
+    /// `keep` highest dice are kept.  If `keep` == 0, all dice are kept.
+    ///
+    /// Any die which is rolls a value greater than or
+    /// equal to `fuse` will be added to the total and rolled again.
+    ///
+    /// One-sided dice can't explode, because if they did, they would never
+    /// stop.  [Fudge/Fate](https://en.wikipedia.org/wiki/Fudge_(role-playing_game_system)#Fudge_dice)
+    /// dice can't explode either, because it doesn't make sense for them to.
+    ///
+    /// ```
+    /// use ndm::Dice;
+    ///
+    /// // Roll 8 sixteen-sided dice, keeping the highest 3 but exploding on 4 or
+    /// // higher.
+    /// let dice = Dice::new_extended(8, 16, 3, 4);
+    /// ```
     pub fn new_extended(count: usize, sides: u16, keep: isize, fuse: u16) -> Result<Self, DiceParseError> {
         //println!("Called with count: {}, sides: {}, keep: {}, fuse: {}", count, sides, keep, fuse);
         if sides > Self::SIDES_LIMIT {
             return Err(DiceParseError::TooManySides(sides));
-        } else if sides < 2 {
-            if keep != 0 {
-                return Err(DiceParseError::TooManyKept(keep));
-            }
-            if fuse != 0 {
-                return Err(DiceParseError::CannotExplode);
-            }
-        }
-        if count > Self::COUNT_LIMIT {
-            return Err(DiceParseError::TooManyDice(count));
-        }
-        if fuse == 1 {
-            return Err(DiceParseError::ShortFuse);
+        } else if (sides < 2) && (fuse != 0) {
+            return Err(DiceParseError::CannotExplode);
         }
 
-        let mut rolls;
+        if count > Self::COUNT_LIMIT {
+            return Err(DiceParseError::TooManyDice(count));
+        } else if count == 0 {
+            return Err(DiceParseError::ZeroCount);
+        }
+
+        if fuse == 1 {
+            return Err(DiceParseError::ShortFuse);
+        } else if fuse > sides {
+            return Err(DiceParseError::LongFuse(fuse));
+        }
+
+        if (keep < 0) && (count < ((-keep) as usize)) {
+            return Err(DiceParseError::TooManyKept(keep));
+        } else if (keep > 0) && (count < (keep as usize)) {
+            return Err(DiceParseError::TooManyKept(keep));
+        }
+
+        let mut rolls: Vec<u16>;
         let mut rng = thread_rng();
 
         let total = match sides {
@@ -117,7 +198,30 @@ impl Dice {
                     let last_roll = rng.gen_range(0 ..= 2);
                     rolls[last_roll as usize] += 1;
                 }
-                (rolls[2] as i32) - (rolls[0] as i32)
+                // This is an optimization for the way Fate dice are stored and
+                // is therefore suspect as premature.  On the other hand, it
+                // works (and there's a test for it).
+                match keep.cmp(&0) {
+                    Ordering::Less => {
+                        if rolls[0] as isize >= -keep {
+                            keep as i32
+                        } else if (rolls[0] + rolls[1]) as isize >= -keep {
+                            -(rolls[0] as i32)
+                        } else {
+                            (-keep as i32) - (rolls[1] as i32) - 2 * (rolls[0] as i32)
+                        }
+                    },
+                    Ordering::Greater => {
+                        if rolls[2] as isize >= keep {
+                            keep as i32
+                        } else if (rolls[1] + rolls[2]) as isize >= keep {
+                            rolls[2] as i32
+                        } else {
+                            (-keep as i32) + (rolls[1] as i32) + 2 * (rolls[2] as i32) as i32
+                        }
+                    },
+                    Ordering::Equal => (rolls[2] as i32) - (rolls[0] as i32)
+                }
             },
             1 => {
                 rolls = Vec::with_capacity(0);
@@ -139,18 +243,8 @@ impl Dice {
                     rolls.sort_unstable();
                 }
                 let range = match keep.cmp(&0) {
-                    Ordering::Less => {
-                        if rolls.len() < (-keep) as usize {
-                            return Err(DiceParseError::TooManyKept(keep));
-                        }
-                        0 .. (-keep as usize)
-                    },
-                    Ordering::Greater => {
-                        if rolls.len() < keep as usize {
-                            return Err(DiceParseError::TooManyKept(keep));
-                        }
-                        rolls.len() - (keep as usize) .. rolls.len()
-                    },
+                    Ordering::Less => 0 .. (-keep as usize),
+                    Ordering::Greater => rolls.len() - (keep as usize) .. rolls.len(),
                     Ordering::Equal => 0 .. rolls.len(),
                 };
 
@@ -160,29 +254,63 @@ impl Dice {
         Ok(Dice { count, sides, fuse, rolls, keep, total })
     }
 
+    /// The net value of this roll (after dropping any dice that weren't [kept]
+    /// and adding any that met or exceeded the [fuse]).
     pub fn total(&self) -> i32 { self.total }
+
+    /// The number of sides on the dice.  Fate/Fudge dice have zero (0) sides.
     pub fn sides(&self) -> u16 { self.sides }
+
+    /// The number of dice requested.  This may differ from the number of dice
+    /// rolled (as returned by [rolls] and [all_rolls] if any dice exploded (see
+    /// [fuse]), or if any weren't kept (see [kept]).  This will always be at
+    /// least one (1).
     pub fn count(&self) -> usize { self.count }
+
+    /// The [kept] rolls.  This may be less than the number of dice requested if
+    /// some weren't kept, or more if some rolls met or exceeded the [fuse].
+    /// See [all_rolls] for all dice rolled.
     pub fn rolls(&self) -> &Vec<u16> { &self.rolls }
+
+    /// All dice rolled, including any dice that weren't [kept] in the total.
+    /// This may differ from the [count] if any dice met or exceeded the [fuse].
+    ///
+    /// There are two special cases:
+    /// * Fudge/Fate dice always return a reference to a [Vec] of length 3:
+    ///   * `[0]` is the number of minuses or failures
+    ///   * `[1]` is the number of zeroes or neutral results
+    ///   * `[2]` is the number of pluses or successes
+    /// * One-sided dice (d1) always return an empty [Vec], since they can't
+    ///   roll anything but a one (1).
+    ///
+    /// Note that neither Fudge/Fate dice nor `d1`s can "explode".  It is
+    /// invalid to [keep] high or low rolls on `d1`s.
+    pub fn all_rolls(&self) -> &Vec<u16> { &self.rolls }
+
+    /// The number upon which dice "exploded", triggering a re-roll.
+    /// Zero (0) means the dice couldn't explode.
     pub fn fuse(&self) -> u16 { self.fuse }
+
+    /// Indicates whether any dice actually exploded.  This is a utility method
+    /// as the semantics of measuring how many dice were rolled is not trivially
+    /// derivable from [all_rolls].
+    pub fn exploded(&self) -> bool {
+        (self.sides >= 2) && (self.fuse != 0) && (self.rolls.len() > self.count)
+    }
+
+    /// The number of dice kept when calculating the [total] of this roll.
+    pub fn kept(&self) -> isize { self.keep }
 }
 
 impl Display for Dice {
+    /// The output format for [Dice] is currently unstable but considered
+    /// human-readable.
     fn fmt(&self, fmt: &mut Formatter) -> Result<(), FmtError> {
-        match self.sides {
-            // Fate dice can't explode; they don't at construction, but we
-            // shouldn't imply they can.
-            0 => write!(fmt, "{}dF", self.count)?,
-            // neither can a d1 (which is mostly implemented for testing)
-            1 => write!(fmt, "{}d1", self.count)?,
-            x => {
-                write!(fmt, "{}d{}", self.count, x)?;
-                if self.fuse > 1 {
-                    write!(fmt, "!")?;
-                    if self.fuse != self.sides {
-                        write!(fmt, "{}", x)?;
-                    }
-                }
+        write!(fmt, "{}d{}", self.count, self.sides)?;
+        if self.fuse > 1 {
+            write!(fmt, "!")?;
+            if self.fuse != self.sides {
+                write!(fmt, "{}", self.fuse)?;
             }
         }
 
@@ -312,7 +440,7 @@ pub mod test {
         };
     }
 
-#[test]
+    #[test]
     fn build_vs_new() {
         expect_dice_similar!("1d6", Dice::new_extended(1, 6, 0, 0));
         expect_dice_similar!("1d6!", Dice::new_exploding(1, 6, 6));
@@ -322,78 +450,139 @@ pub mod test {
         expect_dice_similar!("1d6", Some(Dice { count: 1, sides: 6, fuse: 0, rolls: vec![1], total: 1, keep: 0 }));
     }
 
-#[test]
+    #[test]
     fn r_1d6() {
         expect_dice_similar!("1d6", Dice::new_extended(1, 6, 0, 0));
     }
 
-#[test]
+    #[test]
     fn r_1d6_exploding() {
         expect_dice_similar!("1d6!", Dice::new_extended(1, 6, 0, 6));
     }
 
-#[test]
+    #[test]
     fn r_d6() {
         expect_dice_similar!("1d6", Dice::new_extended(1, 6, 0, 0));
     }
 
-#[test]
+    #[test]
     fn r_1df() {
         expect_dice_similar!("1df", Dice::new_extended(1, 0, 0, 0));
     }
 
-#[test]
+    #[test]
     fn r_1df_caps() {
         expect_dice_similar!("1DF", Dice::new_extended(1, 0, 0, 0));
     }
 
-#[test]
+    #[test]
     fn no_explode() {
         assert_eq!("1d1!".parse::<Dice>(), Err(DiceParseError::CannotExplode));
         assert_eq!("1df!".parse::<Dice>(), Err(DiceParseError::CannotExplode));
     }
 
-#[test]
+    #[test]
     fn roll_d1() {
         let roll = "3d1".parse::<Dice>().unwrap();
         assert_eq!(roll.sides, 1);
         assert_eq!(roll.total, 3);
     }
 
-#[test]
+    #[test]
     fn big_dice_bad() {
         assert_eq!("d1001".parse::<Dice>(), Err(DiceParseError::TooManySides(1001)));
         assert_eq!("1d1001".parse::<Dice>(), Err(DiceParseError::TooManySides(1001)));
         assert_eq!("101d10".parse::<Dice>(), Err(DiceParseError::TooManyDice(101)));
     }
 
-#[test]
+    #[test]
     fn keep_three_high() {
         let d = "4d6/h3".parse::<Dice>().unwrap();
         assert_eq!(d.rolls.len(), 4);
         assert_eq!(d.total, d.rolls[1..].to_vec().iter().fold(0, |acc, x| acc + (*x as i32)));
     }
 
-#[test]
+    #[test]
     fn keep_three_low() {
         let d = "4d6/L3".parse::<Dice>().unwrap();
         assert_eq!(d.rolls.len(), 4);
         assert_eq!(d.total, d.rolls[..3].to_vec().iter().fold(0, |acc, x| acc + (*x as i32)));
     }
 
-#[test]
+    #[test]
     fn two_keep_three_bad() {
         assert_eq!("2d20/H3".parse::<Dice>(), Err(DiceParseError::TooManyKept(3)));
     }
 
-#[test]
-    fn no_keep_d1() {
-        assert_eq!("12d1/l3".parse::<Dice>(), Err(DiceParseError::TooManyKept(-3)));
+    #[test]
+    fn keep_d1() {
+        assert_eq!("12d1/l3".parse::<Dice>(), Dice::new_keep_n(12, 1, -3));
+        assert_eq!("12d1/h3".parse::<Dice>(), Dice::new_keep_n(12, 1, 3));
     }
 
-#[test]
+    #[test]
     fn no_explode_1() {
         assert_eq!("1d5!1".parse::<Dice>(), Err(DiceParseError::ShortFuse));
         assert!("1d5!2".parse::<Dice>().is_ok());
+    }
+
+    fn calc_short_keep(rolls: &Vec<i32>, keep: isize) -> i32 {
+        use std::cmp::Ordering;
+
+        match keep.cmp(&0) {
+            Ordering::Less => {
+                if rolls[0] as isize >= -keep {
+                    keep as i32
+                } else if (rolls[0] + rolls[1]) as isize >= -keep {
+                    -(rolls[0] as i32)
+                } else {
+                    (-keep as i32) - (rolls[1] as i32) - 2 * (rolls[0] as i32)
+                }
+            },
+            Ordering::Greater => {
+                if rolls[2] as isize >= keep {
+                    keep as i32
+                } else if (rolls[1] + rolls[2]) as isize >= keep {
+                    rolls[2] as i32
+                } else {
+                    (-keep as i32) + (rolls[1] as i32) + 2 * (rolls[2] as i32) as i32
+                }
+            },
+            Ordering::Equal => (rolls[2] as i32) - (rolls[0] as i32)
+        }
+    }
+
+    fn calc_long_keep(rolls: &Vec<i32>, keep: isize) -> i32 {
+        use std::cmp::Ordering;
+
+        let range = match keep.cmp(&0) {
+            Ordering::Less => 0 .. (-keep as usize),
+            Ordering::Greater => rolls.len() - (keep as usize) .. rolls.len(),
+            Ordering::Equal => 0 .. rolls.len(),
+        };
+        rolls[range].iter().map(|&x| x as i32).sum()
+    }
+
+    #[test]
+    fn fate_keepers() {
+        // N.B., doubling EXP increases the runtime of this test by a factor of
+        // 10 (the runtime is exponential over LIMIT)
+        const EXP: u32 = 5;
+        let limit = 3usize.pow(EXP);
+
+        for i in 0 .. limit {
+            let mut short_rolls = vec![0i32; 3];
+            let mut long_rolls = vec![0i32; EXP as usize];
+            let mut ctr = i;
+            for j in 0 .. EXP as usize {
+                short_rolls[ctr % 3] += 1;
+                long_rolls[j] = (ctr % 3) as i32 - 1;
+                ctr /= 3;
+            }
+            long_rolls.sort_unstable();
+            for keep in -(EXP as isize) ..= EXP as isize {
+                assert_eq!(calc_short_keep(&short_rolls, keep), calc_long_keep(&long_rolls, keep));
+            }
+        }
     }
 }
