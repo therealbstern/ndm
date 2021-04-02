@@ -120,7 +120,7 @@ let roll_set: RollSet = "3d6".parse().unwrap();
 ```
 
 `RollSet`s can contain any combinations of valid `Dice` and whole numbers,
-joined by `+` or `-` (or &#x2212;).  These combinations can also be multiplied
+joined by `+` or `-` (or &minus;).  These combinations can also be multiplied
 by floating-point numbers, using `*` (or `x` or `X` or &times;).
 
 ```rust
@@ -201,8 +201,8 @@ The dice notation parsed by this library is:
   - If the fuse is provided, it must be at least 2
   - Otherwise, it defaults to the highest possible roll for the die
 
-Dice can be added with `+`, subtracted with `-` [or &#x2212;], or multiplied
-with `*` [or `x` or &#x00d7;].  Other text is treated as comments.
+Dice can be added with `+`, subtracted with `-` [or &minus;], or multiplied
+with `*` [or `x` or &times;].  Other text is treated as comments.
 
 `Dice` can be combined with each other by addition or subtraction.  You can also
 add or subtract whole numbers and multiply results by floating point numbers.
