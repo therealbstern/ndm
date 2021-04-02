@@ -225,7 +225,11 @@ impl Dice {
             },
             1 => {
                 rolls = Vec::with_capacity(0);
-                count as i32
+                match keep.cmp(&0) {                                                                                                 
+                    Ordering::Less => -keep as i32,
+                    Ordering::Greater => keep as i32,
+                    Ordering::Equal => count as i32,
+                }
             },
             _ => {
                 rolls = Vec::new();
@@ -270,7 +274,28 @@ impl Dice {
     /// The [kept] rolls.  This may be less than the number of dice requested if
     /// some weren't kept, or more if some rolls met or exceeded the [fuse].
     /// See [all_rolls] for all dice rolled.
-    pub fn rolls(&self) -> &Vec<u16> { &self.rolls }
+    ///
+    /// There are two special cases:
+    /// * Fudge/Fate dice always return a reference to a [Vec] of length 3:
+    ///   * `[0]` is the number of minuses or failures
+    ///   * `[1]` is the number of zeroes or neutral results
+    ///   * `[2]` is the number of pluses or successes
+    /// * One-sided dice (d1) always return an empty [Vec], since they can't
+    ///   roll anything but a one (1).
+    ///
+    /// Note that neither Fudge/Fate dice nor `d1`s can "explode".  Also note
+    /// that for these dice, the [total] is usually the most interesting value.
+    pub fn rolls(&self) -> &[u16] {
+        if self.sides > 1 {
+            match self.keep.cmp(&0) {
+                Ordering::Less => &self.rolls[0 .. (-self.keep as usize)],
+                Ordering::Greater => &self.rolls[self.rolls.len() - (self.keep as usize) .. self.rolls.len()],
+                Ordering::Equal => &self.rolls,
+            }
+        } else {
+            self.all_rolls()
+        }
+    }
 
     /// All dice rolled, including any dice that weren't [kept] in the total.
     /// This may differ from the [count] if any dice met or exceeded the [fuse].
@@ -283,8 +308,9 @@ impl Dice {
     /// * One-sided dice (d1) always return an empty [Vec], since they can't
     ///   roll anything but a one (1).
     ///
-    /// Note that neither Fudge/Fate dice nor `d1`s can "explode".  It is
-    /// invalid to [keep] high or low rolls on `d1`s.
+    /// Note that neither Fudge/Fate dice nor `d1`s can "explode".
+    /// Also note that for one-sided dice, the [count] and the [total] are
+    /// usually more useful data.
     pub fn all_rolls(&self) -> &Vec<u16> { &self.rolls }
 
     /// The number upon which dice "exploded", triggering a re-roll.
@@ -293,7 +319,8 @@ impl Dice {
 
     /// Indicates whether any dice actually exploded.  This is a utility method
     /// as the semantics of measuring how many dice were rolled is not trivially
-    /// derivable from [all_rolls].
+    /// derivable from [all_rolls].  Note that neither Fudge/Fate dice nor `d1`s
+    /// can explode.
     pub fn exploded(&self) -> bool {
         (self.sides >= 2) && (self.fuse != 0) && (self.rolls.len() > self.count)
     }
@@ -518,6 +545,22 @@ pub mod test {
     fn keep_d1() {
         assert_eq!("12d1/l3".parse::<Dice>(), Dice::new_keep_n(12, 1, -3));
         assert_eq!("12d1/h3".parse::<Dice>(), Dice::new_keep_n(12, 1, 3));
+
+        let d = "12d1/h3".parse::<Dice>().unwrap();
+        assert_eq!(d.total, 3);
+        let d = "12d1/l3".parse::<Dice>().unwrap();
+        assert_eq!(d.total, 3);
+        assert_eq!(d.rolls().len(), 3);
+        assert_eq!(d.all_rolls().len(), 12);
+    }
+
+    #[test]
+    fn keep_df() {
+        expect_dice_similar!("12df/l3", Dice::new_keep_n(12, 0, -3));
+        expect_dice_similar!("12dF/h3", Dice::new_keep_n(12, 0, 3));
+
+        let d = "12df/h3".parse::<Dice>().unwrap();
+        assert_eq!(d.kept(), 3);
     }
 
     #[test]
