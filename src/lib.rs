@@ -126,7 +126,7 @@
 //!
 //! `RollSet`s can contain any combinations of valid [Dice] and whole numbers,
 //! joined by `+` or `-` (or &#x2212;).  These combinations can also be
-//! multiplied by floating-point numbers, using `*` (or `x` or `X` or &times;).
+//! multiplied by floating-point numbers, using `*` (or `x` or `X` or &#x00d7;).
 //!
 //! ```
 //! use ndm::RollSet;
