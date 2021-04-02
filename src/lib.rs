@@ -203,7 +203,7 @@
 //! - Optionally, `/`, followed by
 //!   - `H` (or `h`) or `L` (or `l`) and
 //!   - a positive number less than or equal to the number of dice rolled
-//! - Optionally, `!`, optionally followed by the `fuse` as a while number
+//! - Optionally, `!`, optionally followed by the `fuse` as a whole number
 //!   - If the fuse is provided, it must be at least 2
 //!   - Otherwise, it defaults to the highest possible roll for the die
 //!
