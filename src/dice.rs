@@ -550,8 +550,6 @@ pub mod test {
         assert_eq!(d.total, 3);
         let d = "12d1/l3".parse::<Dice>().unwrap();
         assert_eq!(d.total, 3);
-        assert_eq!(d.rolls().len(), 3);
-        assert_eq!(d.all_rolls().len(), 12);
     }
 
     #[test]
