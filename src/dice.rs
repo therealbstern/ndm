@@ -12,7 +12,7 @@ use std::str::FromStr;
 use lazy_static::lazy_static;
 use rand::{thread_rng, Rng};
 use regex::{Captures, Regex};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 lazy_static! {
     // ?x ignores space/comments in the regex, not in the string we're checking
@@ -61,7 +61,7 @@ impl Display for DiceParseError {
 
 impl Error for DiceParseError {}
 
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub struct Dice {
     count: usize,
     sides: u16,

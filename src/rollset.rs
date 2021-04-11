@@ -11,7 +11,7 @@ use std::str::FromStr;
 
 use lazy_static::lazy_static;
 use regex::Regex;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::{Dice, DiceParseError};
 
@@ -20,7 +20,7 @@ lazy_static! {
     static ref MATH_RE: Regex = Regex::new("(?P<op>[-\u{2212}+xX*\u{00d7}])").expect("Couldn't compile MATH_RE");
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 enum DiceWords {
     Dice(Dice),
     Bonus(u16),
@@ -88,7 +88,7 @@ impl Display for RollParseError {
 
 impl Error for RollParseError {}
 
-#[derive(Clone, Debug, PartialEq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub struct RollSet {
     words: Vec<DiceWords>,
 }
