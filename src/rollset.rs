@@ -17,7 +17,8 @@ use crate::{Dice, DiceParseError};
 
 lazy_static! {
     // ?x ignores space/comments in the regex, not in the string we're checking
-    static ref MATH_RE: Regex = Regex::new("(?P<op>[-\u{2212}+xX*\u{00d7}])").expect("Couldn't compile MATH_RE");
+    static ref PLUS_MINUS_RE: Regex = Regex::new("(?P<op>[-\u{2212}+])").expect("Couldn't compile PLUS_MINUS_RE");
+    static ref TIMES_RE: Regex = Regex::new("(?P<before>[\\d\\s])(?P<op>[*\u{00d7}xX])(?P<after>[\\d\\s])").expect("Couldn't compile TIMES_RE");
 }
 
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
@@ -192,7 +193,8 @@ impl FromStr for RollSet {
         let mut words = Vec::new();
         let mut roll_found = false;
         let mut total = 0;
-        let replaced = MATH_RE.replace_all(line, " $op ");
+        let pm_repl = PLUS_MINUS_RE.replace_all(line, " $op ");
+        let replaced = TIMES_RE.replace_all(&pm_repl, "$before $op $after");
         let mut each = replaced.split_whitespace();
         while let Some(word) = each.next() {
             let parsed = word.parse::<DiceWords>().unwrap();
@@ -231,13 +233,12 @@ impl FromStr for RollSet {
                 (DiceWords::Multiplier(_), DiceWords::Dice(_)) | // 4.4 4d6
                 (DiceWords::Multiplier(_), DiceWords::Bonus(_)) | // 4.4 4
                 (DiceWords::Multiplier(_), DiceWords::Multiplier(_)) | // 4.4 4.4
-                (DiceWords::Multiplier(_), DiceWords::Other(_)) | // * fire
-                (DiceWords::Multiplier(_), DiceWords::Comment(_)) | // * # foo
 
                 (DiceWords::Other(_), DiceWords::Bonus(_)) | // fire 4
                 (DiceWords::Other(_), DiceWords::Multiplier(_))
 
                 => { // fire 4.4
+                    //eprintln!("{:?} {:?}", last_word, parsed);
                     return Err(RollParseError::InvalidOrder);
                 },
 
@@ -254,6 +255,7 @@ impl FromStr for RollSet {
                 (DiceWords::Multiplier(_), DiceWords::Plus) | // 4.4 +
                 (DiceWords::Multiplier(_), DiceWords::Minus) | // 4.4 -
                 (DiceWords::Multiplier(_), DiceWords::Times) | // 4.4 *
+                (DiceWords::Multiplier(_), DiceWords::Other(_)) | // 1.5 fire
 
                 (DiceWords::Other(_), DiceWords::Plus) | // fire +
                 (DiceWords::Other(_), DiceWords::Minus) | // fire -
@@ -289,7 +291,8 @@ impl FromStr for RollSet {
 
                 (DiceWords::Dice(_), DiceWords::Comment(s)) | // 4d6 # first
                 (DiceWords::Bonus(_), DiceWords::Comment(s)) | // 4 # foo
-                (DiceWords::Other(_), DiceWords::Comment(s)) // fire # foo
+                (DiceWords::Other(_), DiceWords::Comment(s)) | // fire # foo
+                (DiceWords::Multiplier(_), DiceWords::Comment(s)) // 1.5 # foo
                 => {
                     //println!("Pushing in total");
                     words.push(DiceWords::Total(total));
@@ -324,6 +327,8 @@ impl FromStr for RollSet {
         }
         if !roll_found {
             Err(RollParseError::MissingRoll)
+        } else if matches!(last_word, DiceWords::Times | DiceWords::Plus | DiceWords::Minus) {
+            Err(RollParseError::InvalidOrder)
         } else {
             //println!("last_word: {:?}", last_word);
             if !matches!(last_word, DiceWords::Comment(_)) {
@@ -803,13 +808,26 @@ mod test {
         assert_eq!(format!("{}", "4d1 # foo".parse::<RollSet>().unwrap()), "4d1 [4] = 4 |# foo|");
     }
 
-//#[test]
-//    fn multi_roll() {
-//        assert_eq!(join_rolls("4d1; 2d1"), "rolls 4d1 [4] = 4; 2d1 [2] = 2");
-//    }
+    #[test]
+    fn ends_with_operator() {
+        assert!("1d6+".parse::<RollSet>().is_err());
+        assert!("1d6x".parse::<RollSet>().is_err());
+        assert!("1d6-".parse::<RollSet>().is_err());
+    }
 
-//#[test]
-//    fn multi_roll_comment() {
-//        assert_eq!(join_rolls("4d1 # foo; 2d1"), "rolls 4d1 [4] = 4 # foo; 2d1 [2] = 2");
-//    }
+    #[test]
+    fn multiplier_other_ok() {
+        assert!("1d20+4+1d6-3*1.5 for ham + 4 - 1d6 foo".parse::<RollSet>().is_ok());
+    }
+
+    #[test]
+    fn times() {
+        assert!("1d6x4".parse::<RollSet>().is_ok());
+        assert!("1d6X4".parse::<RollSet>().is_ok());
+        assert!("1d6*4".parse::<RollSet>().is_ok());
+        assert!("1d6\u{00d7}4".parse::<RollSet>().is_ok());
+        assert!("1d6 complex".parse::<RollSet>().is_ok());
+        assert!("1d6 x".parse::<RollSet>().is_err());
+        assert!("1d6x".parse::<RollSet>().is_err());
+    }
 }
