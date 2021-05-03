@@ -17,7 +17,7 @@ use crate::{Dice, DiceParseError};
 
 lazy_static! {
     // ?x ignores space/comments in the regex, not in the string we're checking
-    static ref PLUS_MINUS_RE: Regex = Regex::new("(?P<op>[-\u{2212}+])").expect("Couldn't compile PLUS_MINUS_RE");
+    static ref PLUS_MINUS_RE: Regex = Regex::new("(?P<op>[-+])").expect("Couldn't compile PLUS_MINUS_RE");
     static ref TIMES_RE: Regex = Regex::new("(?P<before>[\\d\\s])(?P<op>[*\u{00d7}xX])(?P<after>[\\d\\s])").expect("Couldn't compile TIMES_RE");
 }
 
@@ -41,7 +41,7 @@ impl Display for DiceWords {
             DiceWords::Bonus(d) => write!(fmt, "{}", d),
             DiceWords::Multiplier(d) => write!(fmt, "{}", d),
             DiceWords::Plus => write!(fmt, "+"),
-            DiceWords::Minus => write!(fmt, "\u{2212}"),
+            DiceWords::Minus => write!(fmt, "-"),
             DiceWords::Times => write!(fmt, "\u{00d7}"),
             DiceWords::Other(s) | DiceWords::Comment(s) => write!(fmt, "|{}|", s),
             DiceWords::Total(t) => write!(fmt, "= {}", t),
@@ -61,7 +61,7 @@ impl FromStr for DiceWords {
             Ok(DiceWords::Multiplier(f))
         } else if line == "+" {
             Ok(DiceWords::Plus)
-        } else if (line == "-") || (line == "\u{2212}") {
+        } else if line == "-" {
             Ok(DiceWords::Minus)
         } else if (line == "x") || (line == "X") || (line == "*") || (line == "\u{00d7}") {
             Ok(DiceWords::Times)
@@ -749,7 +749,7 @@ mod test {
     #[test]
     fn many_rollv_str() {
         let rs = "d1 + 2d1 - 4 to hit".parse::<RollSet>().unwrap();
-        assert_eq!("1d1 [1] + 2d1 [2] \u{2212} 4 |to hit| = -1", format!("{}", rs));
+        assert_eq!("1d1 [1] + 2d1 [2] - 4 |to hit| = -1", format!("{}", rs));
     }
 
     #[test]
@@ -788,7 +788,7 @@ mod test {
         });
 
         assert!(rolls.is_ok());
-        assert_eq!(rolls.unwrap(), "rolls 1d1 [1] + 2d1 [2] \u{2212} 4 |to hit| = -1; 1d1 [1] |for damage| = 1");
+        assert_eq!(rolls.unwrap(), "rolls 1d1 [1] + 2d1 [2] - 4 |to hit| = -1; 1d1 [1] |for damage| = 1");
     }
 
     #[test]
