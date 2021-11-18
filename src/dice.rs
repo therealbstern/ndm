@@ -326,6 +326,28 @@ impl Dice {
 
     /// The number of dice kept when calculating the [total] of this roll.
     pub fn kept(&self) -> isize { self.keep }
+
+    /// Indicates whether this set of dice is similar to another.  Similar means
+    /// both sets of dice have the same number of dice and the same number of
+    /// sides.  Similar *doesn't* mean the two sets of dice have the same rolls
+    /// on each die, or even have the same total.
+    ///
+    /// In the case of exploding dice, it means the same number of dice were
+    /// originally rolled, notwithstanding any explosions that may have
+    /// occurred, *and* the `fuse` is the same.
+    ///
+    /// In the case of dropped dice, it means the same number of dice were
+    /// originally rolled, the same number were dropped, and they were dropped
+    /// from the same side (high or low).
+    ///
+    /// This isn't implemented as `PartialEq` or `Eq` because that means
+    /// something particular to hashes.
+    pub fn similar(&self, other: &Dice) -> bool {
+        (self.count == other.count) &&
+            (self.sides == other.sides) &&
+            (self.keep == other.keep) &&
+            (self.fuse == other.fuse)
+    }
 }
 
 impl Display for Dice {
