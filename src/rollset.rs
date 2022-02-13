@@ -17,7 +17,7 @@ use crate::{Dice, DiceParseError};
 
 lazy_static! {
     // ?x ignores space/comments in the regex, not in the string we're checking
-    static ref PLUS_MINUS_RE: Regex = Regex::new("(?P<op>[-+])").expect("Couldn't compile PLUS_MINUS_RE");
+    static ref PLUS_MINUS_RE: Regex = Regex::new("(?P<op>[-\u{2212}+])").expect("Couldn't compile PLUS_MINUS_RE");
     static ref TIMES_RE: Regex = Regex::new("(?P<before>[\\d\\s])(?P<op>[*\u{00d7}xX])(?P<after>[\\d\\s])").expect("Couldn't compile TIMES_RE");
 }
 
@@ -61,7 +61,7 @@ impl FromStr for DiceWords {
             Ok(DiceWords::Multiplier(f))
         } else if line == "+" {
             Ok(DiceWords::Plus)
-        } else if line == "-" {
+        } else if (line == "-") || (line == "\u{2212}") {
             Ok(DiceWords::Minus)
         } else if (line == "x") || (line == "X") || (line == "*") || (line == "\u{00d7}") {
             Ok(DiceWords::Times)
@@ -391,6 +391,11 @@ mod test {
     #[test]
     fn caps_1d20minus4() {
         expect_rollset_similar!("1D20 - 4", &[ DiceWords::Dice(Dice::new(1, 20).unwrap()), DiceWords::Minus, DiceWords::Bonus(4) ]);
+    }
+
+    #[test]
+    fn unicrud_minus() {
+        expect_rollset_similar!("1d20 − 4", &[ DiceWords::Dice(Dice::new(1, 20).unwrap()), DiceWords::Minus, DiceWords::Bonus(4) ]);
     }
 
     #[test]

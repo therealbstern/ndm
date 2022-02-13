@@ -369,7 +369,7 @@ impl FromStr for Dice {
     type Err = DiceParseError;
 
     fn from_str(line: &str) -> Result<Self, Self::Err> {
-        let mut caps = DICE_RE.captures_iter(&line);
+        let mut caps = DICE_RE.captures_iter(line);
         let word = caps.next().ok_or(DiceParseError::Unparseable)?;
         Dice::try_from(word)
     }
