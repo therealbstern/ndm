@@ -1,6 +1,8 @@
 // Copyright (C) 2021 Ben Stern
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
+#![forbid(unsafe_code)]
+
 use std::env;
 use std::error::Error;
 use std::fmt::Write;
