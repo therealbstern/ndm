@@ -41,7 +41,7 @@ impl Display for DiceWords {
             DiceWords::Bonus(d) => write!(fmt, "{}", d),
             DiceWords::Multiplier(d) => write!(fmt, "{}", d),
             DiceWords::Plus => write!(fmt, "+"),
-            DiceWords::Minus => write!(fmt, "-"),
+            DiceWords::Minus => write!(fmt, "\u{2212}"),
             DiceWords::Times => write!(fmt, "\u{00d7}"),
             DiceWords::Other(s) | DiceWords::Comment(s) => write!(fmt, "|{}|", s),
             DiceWords::Total(t) => write!(fmt, "= {}", t),
@@ -73,7 +73,7 @@ impl FromStr for DiceWords {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RollParseError {
     DiceError(DiceParseError),
     InvalidOrder,
@@ -568,6 +568,34 @@ mod test {
     }
 
     #[test]
+    fn regular_minus() {
+        let rs = "d8-2".parse::<RollSet>().unwrap();
+        assert_eq!(rs.words.len(), 4);
+
+        let roll = unwrap_dice!(&rs.words[0]);
+        assert_eq!(roll.rolls().len(), 1);
+        assert_eq!(roll.sides(), 8);
+
+        assert_eq!(rs.words[1], DiceWords::Minus);
+        assert_eq!(rs.words[2], DiceWords::Bonus(2));
+        assert!(matches!(rs.words[3], DiceWords::Total(_)));
+    }
+
+    #[test]
+    fn unicrud_minus() {
+        let rs = "d8\u{2212}2".parse::<RollSet>().unwrap();
+        assert_eq!(rs.words.len(), 4);
+
+        let roll = unwrap_dice!(&rs.words[0]);
+        assert_eq!(roll.rolls().len(), 1);
+        assert_eq!(roll.sides(), 8);
+
+        assert_eq!(rs.words[1], DiceWords::Minus);
+        assert_eq!(rs.words[2], DiceWords::Bonus(2));
+        assert!(matches!(rs.words[3], DiceWords::Total(_)));
+    }
+
+    #[test]
     fn test_only_penalty() {
         let rs = "3d8-2".parse::<RollSet>().unwrap();
         assert_eq!(rs.words.len(), 4);
@@ -754,7 +782,7 @@ mod test {
     #[test]
     fn many_rollv_str() {
         let rs = "d1 + 2d1 - 4 to hit".parse::<RollSet>().unwrap();
-        assert_eq!("1d1 [1] + 2d1 [2] - 4 |to hit| = -1", format!("{}", rs));
+        assert_eq!("1d1 [1] + 2d1 [2] \u{2212} 4 |to hit| = -1", format!("{}", rs));
     }
 
     #[test]
@@ -778,7 +806,7 @@ mod test {
 
     #[test]
     fn more_like_chat() {
-        let line = "/roll d1 + 2d1 - 4 to hit; 1d1 for damage";
+        let line = "/roll d1 + 2d1 \u{2212} 4 to hit; 1d1 for damage";
         let chatter: Vec<&str> = line.splitn(2, char::is_whitespace).collect();
         assert_eq!(chatter.len(), 2);
         assert!(chatter[0].starts_with("/r"));
@@ -793,7 +821,7 @@ mod test {
         });
 
         assert!(rolls.is_ok());
-        assert_eq!(rolls.unwrap(), "rolls 1d1 [1] + 2d1 [2] - 4 |to hit| = -1; 1d1 [1] |for damage| = 1");
+        assert_eq!(rolls.unwrap(), "rolls 1d1 [1] + 2d1 [2] \u{2212} 4 |to hit| = -1; 1d1 [1] |for damage| = 1");
     }
 
     #[test]
@@ -822,7 +850,7 @@ mod test {
 
     #[test]
     fn multiplier_other_ok() {
-        assert!("1d20+4+1d6-3*1.5 for ham + 4 - 1d6 foo".parse::<RollSet>().is_ok());
+        assert!("1d20+4+1d6-3*1.5 for ham + 4 \u{2212} 1d6 foo".parse::<RollSet>().is_ok());
     }
 
     #[test]

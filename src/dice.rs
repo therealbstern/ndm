@@ -475,16 +475,10 @@ pub mod test {
         ($text: literal, $expect: expr) => {
             let parsed = $text.parse::<Dice>().unwrap();
             let provided = $expect.unwrap();
-            expect_dice_similar!(parsed, provided)
+            assert!(parsed.similar(&provided));
         };
         ($d1: expr, $d2: expr) => {
-            //println!("Comparing:\n\t{:?}\n\t{:?}", $d1, $d2);
-            assert_eq!($d1.count(), $d2.count());
-            assert_eq!($d1.sides(), $d2.sides());
-            assert_eq!($d1.fuse(), $d2.fuse());
-            if $d1.fuse() == 0 {
-                assert_eq!($d1.rolls().len(), $d2.rolls().len());
-            }
+            assert!($d1.similar(&$d2));
         };
     }
 
@@ -496,11 +490,6 @@ pub mod test {
         expect_dice_similar!("1d6/L1", Dice::new_keep_n(1, 6, -1));
         expect_dice_similar!("1d6/L1!2", Dice::new_extended(1, 6, -1, 2));
         expect_dice_similar!("1d6", Some(Dice { count: 1, sides: 6, fuse: 0, rolls: vec![1], total: 1, keep: 0 }));
-    }
-
-    #[test]
-    fn r_1d6() {
-        expect_dice_similar!("1d6", Dice::new_extended(1, 6, 0, 0));
     }
 
     #[test]
@@ -516,6 +505,12 @@ pub mod test {
     #[test]
     fn r_1df() {
         expect_dice_similar!("1df", Dice::new_extended(1, 0, 0, 0));
+    }
+
+    #[test]
+    fn r_1df_count() {
+        let f = "1df".parse::<Dice>().unwrap();
+        assert!(f.sides == 0);
     }
 
     #[test]
