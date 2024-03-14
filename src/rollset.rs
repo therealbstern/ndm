@@ -582,7 +582,7 @@ mod test {
     }
 
     #[test]
-    fn unicrud_minus() {
+    fn unicrud_minus_explicit() {
         let rs = "d8\u{2212}2".parse::<RollSet>().unwrap();
         assert_eq!(rs.words.len(), 4);
 
