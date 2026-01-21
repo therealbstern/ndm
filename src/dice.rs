@@ -21,6 +21,7 @@ lazy_static! {
         (?P<count> [1-9]\d*)?d(?P<sides> f|(?: [1-9]\d*))   # NdM/dM/NdF/dF
         (?:/ (?P<updown> [HL]) (?P<amount> [1-9]\d*))?
         (?P<exploding> ! (?P<fuse> [0-9]+)?)?
+        (\? (?P<minimum> [1-9]\d*))?
         $
         ").expect("Couldn't compile DICE_RE");
 }
@@ -29,7 +30,8 @@ lazy_static! {
 pub enum DiceParseError {
     /// An attempt was made to create zero dice.
     ZeroCount,
-    /// A fuse of 1 was provided; such a fuse would always explode.
+    /// A fuse of the minimum roll or less was provided; such a fuse would
+    /// always explode.
     ShortFuse,
     /// An impossible fuse was provided; such a fuse would never explode and
     /// indicates a logic error.
@@ -48,7 +50,7 @@ pub enum DiceParseError {
     Unparseable,
     /// The dice-matching regular expression matched when it shouldn't have,
     /// which is probably a bug in `ndm`.
-    Regex
+    Regex,
 }
 
 impl Eq for DiceParseError {}
@@ -67,6 +69,7 @@ pub struct Dice {
     sides: u16,
     keep: isize,
     fuse: u16,
+    minimum: u16,
     rolls: Vec<u16>,
     total: i32,
 }
@@ -97,7 +100,7 @@ impl Dice {
     /// let d6 = Dice::new(1, 6);
     /// ```
     pub fn new(n: usize, m: u16) -> Result<Self, DiceParseError> {
-        Dice::new_extended(n, m, 0, 0)
+        Dice::new_extended(n, m, 0, 0, 1)
     }
 
     /// Roll "exploding" dice.  Dice are rolled at creation time and not
@@ -119,7 +122,7 @@ impl Dice {
     /// let d6_explode_5 = Dice::new_exploding(1, 6, 5);
     /// ```
     pub fn new_exploding(count: usize, sides: u16, fuse: u16) -> Result<Self, DiceParseError> {
-        Dice::new_extended(count, sides, 0, fuse)
+        Dice::new_extended(count, sides, 0, fuse, 1)
     }
 
     /// Roll dice, adding only the highest or lowest `n` rolls to the total.
@@ -139,7 +142,7 @@ impl Dice {
     /// let disadvantage = Dice::new_keep_n(2, 20, -1);
     /// ```
     pub fn new_keep_n(count: usize, sides: u16, n: isize) -> Result<Self, DiceParseError> {
-        Dice::new_extended(count, sides, n, 0)
+        Dice::new_extended(count, sides, n, 0, 1)
     }
 
     /// Roll dice which may explode and optionally use some of the dice
@@ -160,10 +163,10 @@ impl Dice {
     /// use ndm::Dice;
     ///
     /// // Roll 8 sixteen-sided dice, keeping the highest 3 but exploding on 4 or
-    /// // higher.
-    /// let dice = Dice::new_extended(8, 16, 3, 4);
+    /// // higher, and making all 1s 2s.
+    /// let dice = Dice::new_extended(8, 16, 3, 4, 2);
     /// ```
-    pub fn new_extended(count: usize, sides: u16, keep: isize, fuse: u16) -> Result<Self, DiceParseError> {
+    pub fn new_extended(count: usize, sides: u16, keep: isize, fuse: u16, minimum: u16) -> Result<Self, DiceParseError> {
         //println!("Called with count: {}, sides: {}, keep: {}, fuse: {}", count, sides, keep, fuse);
         if sides > Self::SIDES_LIMIT {
             return Err(DiceParseError::TooManySides(sides));
@@ -177,7 +180,7 @@ impl Dice {
             return Err(DiceParseError::ZeroCount);
         }
 
-        if fuse == 1 {
+        if (fuse > 0) && (fuse <= minimum) {
             return Err(DiceParseError::ShortFuse);
         } else if fuse > sides {
             return Err(DiceParseError::LongFuse(fuse));
@@ -224,7 +227,7 @@ impl Dice {
             },
             1 => {
                 rolls = Vec::with_capacity(0);
-                match keep.cmp(&0) {                                                                                                 
+                match keep.cmp(&0) {
                     Ordering::Less => -keep as i32,
                     Ordering::Greater => keep as i32,
                     Ordering::Equal => count as i32,
@@ -234,10 +237,16 @@ impl Dice {
                 rolls = Vec::new();
                 for _ in 0 .. count {
                     let mut last_roll = rng.gen_range(1 ..= sides);
+                    if last_roll < minimum {
+                        last_roll = minimum;
+                    }
                     rolls.push(last_roll);
-                    if fuse > 1 {
+                    if fuse > minimum {
                         while last_roll >= fuse {
                             last_roll = rng.gen_range(1 ..= sides);
+                            if last_roll < minimum {
+                                last_roll = minimum;
+                            }
                             rolls.push(last_roll);
                         }
                     }
@@ -254,7 +263,7 @@ impl Dice {
                 rolls[range].iter().map(|&x| x as i32).sum()
             }
         };
-        Ok(Dice { count, sides, fuse, rolls, keep, total })
+        Ok(Dice { count, sides, fuse, rolls, keep, total, minimum })
     }
 
     /// The net value of this roll (after dropping any dice that weren't [kept]
@@ -340,13 +349,16 @@ impl Dice {
     /// originally rolled, the same number were dropped, and they were dropped
     /// from the same side (high or low).
     ///
+    /// In the case of minima, the two dice have the same [minimum].
+    ///
     /// This isn't implemented as `PartialEq` or `Eq` because that means
     /// something particular to hashes.
     pub fn similar(&self, other: &Dice) -> bool {
         (self.count == other.count) &&
             (self.sides == other.sides) &&
             (self.keep == other.keep) &&
-            (self.fuse == other.fuse)
+            (self.fuse == other.fuse) &&
+            (self.minimum == other.minimum)
     }
 }
 
@@ -360,6 +372,9 @@ impl Display for Dice {
             if self.fuse != self.sides {
                 write!(fmt, "{}", self.fuse)?;
             }
+        }
+        if self.minimum > 1 {
+            write!(fmt, "?{}", self.minimum)?;
         }
 
         let count = self.rolls.len();
@@ -448,7 +463,7 @@ impl TryFrom<Captures<'_>> for Dice {
         let fuse = if cap.name("exploding").is_some() {
             if let Some(fuse) = cap.name("fuse") {
                 let fuse_s = fuse.as_str();
-                let fuse_val = fuse_s.parse().map_err(|_| DiceParseError::Unparseable)?;
+                let fuse_val = fuse_s.parse().map_err(|_| DiceParseError::Regex)?;
                 if fuse_val <= 1 {
                     return Err(DiceParseError::ShortFuse);
                 }
@@ -462,7 +477,14 @@ impl TryFrom<Captures<'_>> for Dice {
             0
         };
 
-        Self::new_extended(count, sides, keep, fuse)
+        let minimum = if let Some(min) = cap.name("minimum") {
+            let min_s = min.as_str();
+            min_s.parse().map_err(|_| DiceParseError::Regex)?
+        } else {
+            1
+        };
+
+        Self::new_extended(count, sides, keep, fuse, minimum)
     }
 }
 
@@ -484,27 +506,27 @@ pub mod test {
 
     #[test]
     fn build_vs_new() {
-        expect_dice_similar!("1d6", Dice::new_extended(1, 6, 0, 0));
+        expect_dice_similar!("1d6", Dice::new_extended(1, 6, 0, 0, 1));
         expect_dice_similar!("1d6!", Dice::new_exploding(1, 6, 6));
         expect_dice_similar!("1d6/H1", Dice::new_keep_n(1, 6, 1));
         expect_dice_similar!("1d6/L1", Dice::new_keep_n(1, 6, -1));
-        expect_dice_similar!("1d6/L1!2", Dice::new_extended(1, 6, -1, 2));
-        expect_dice_similar!("1d6", Some(Dice { count: 1, sides: 6, fuse: 0, rolls: vec![1], total: 1, keep: 0 }));
+        expect_dice_similar!("1d6/L1!2", Dice::new_extended(1, 6, -1, 2, 1));
+        expect_dice_similar!("1d6", Some(Dice { count: 1, sides: 6, fuse: 0, rolls: vec![1], total: 1, keep: 0, minimum: 1 }));
     }
 
     #[test]
     fn r_1d6_exploding() {
-        expect_dice_similar!("1d6!", Dice::new_extended(1, 6, 0, 6));
+        expect_dice_similar!("1d6!", Dice::new_extended(1, 6, 0, 6, 1));
     }
 
     #[test]
     fn r_d6() {
-        expect_dice_similar!("1d6", Dice::new_extended(1, 6, 0, 0));
+        expect_dice_similar!("1d6", Dice::new_extended(1, 6, 0, 0, 1));
     }
 
     #[test]
     fn r_1df() {
-        expect_dice_similar!("1df", Dice::new_extended(1, 0, 0, 0));
+        expect_dice_similar!("1df", Dice::new_extended(1, 0, 0, 0, 1));
     }
 
     #[test]
@@ -515,7 +537,7 @@ pub mod test {
 
     #[test]
     fn r_1df_caps() {
-        expect_dice_similar!("1DF", Dice::new_extended(1, 0, 0, 0));
+        expect_dice_similar!("1DF", Dice::new_extended(1, 0, 0, 0, 1));
     }
 
     #[test]
@@ -529,6 +551,12 @@ pub mod test {
         let roll = "3d1".parse::<Dice>().unwrap();
         assert_eq!(roll.sides, 1);
         assert_eq!(roll.total, 3);
+    }
+
+    #[test]
+    fn minimum() {
+        let roll = "8d4?4".parse::<Dice>().unwrap();
+        assert_eq!(roll.total, 32);
     }
 
     #[test]

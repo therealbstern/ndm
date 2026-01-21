@@ -90,8 +90,8 @@
 //! ```
 //! use ndm::Dice;
 //!
-//! let dice = Dice::new_extended(4, 7, 5, 3);
-//! // or
+//! let dice = Dice::new_extended(4, 7, 5, 3, 1);
+//! // or (perhaps easier to understand)
 //! let dice = "4d7/H3!5".parse::<Dice>().unwrap();
 //! ```
 //!

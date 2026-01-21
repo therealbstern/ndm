@@ -422,7 +422,7 @@ mod test {
             DiceWords::Plus,
             DiceWords::Bonus(4),
             DiceWords::Plus,
-            DiceWords::Dice(Dice::new_extended(11, 99, 0, 99).unwrap()),
+            DiceWords::Dice(Dice::new_extended(11, 99, 0, 99, 1).unwrap()),
             DiceWords::Plus,
             DiceWords::Dice(Dice::new(3, 0).unwrap()),
             DiceWords::Plus,
