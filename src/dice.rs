@@ -219,7 +219,7 @@ impl Dice {
                         } else if (rolls[1] + rolls[2]) as isize >= keep {
                             rolls[2] as i32
                         } else {
-                            (-keep as i32) + (rolls[1] as i32) + 2 * (rolls[2] as i32) as i32
+                            (-keep as i32) + (rolls[1] as i32) + 2 * (rolls[2] as i32)
                         }
                     },
                     Ordering::Equal => (rolls[2] as i32) - (rolls[0] as i32)
