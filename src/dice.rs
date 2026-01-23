@@ -10,7 +10,7 @@ use std::fmt::{Display, Debug, Error as FmtError, Formatter};
 use std::str::FromStr;
 
 use lazy_static::lazy_static;
-use rand::{thread_rng, Rng};
+use rand::{rng, Rng};
 use regex::{Captures, Regex};
 use serde::{Deserialize, Serialize};
 
@@ -191,13 +191,13 @@ impl Dice {
         }
 
         let mut rolls: Vec<u16>;
-        let mut rng = thread_rng();
+        let mut rng = rng();
 
         let total = match sides {
             0 => {
                 rolls = vec![0; 3];
                 for _ in 0 .. count {
-                    let last_roll = rng.gen_range(0 ..= 2);
+                    let last_roll = rng.random_range(0 ..= 2);
                     rolls[last_roll as usize] += 1;
                 }
                 // This is an optimization for the way Fate dice are stored and
@@ -236,14 +236,14 @@ impl Dice {
             _ => {
                 rolls = Vec::new();
                 for _ in 0 .. count {
-                    let mut last_roll = rng.gen_range(1 ..= sides);
+                    let mut last_roll = rng.random_range(1 ..= sides);
                     if last_roll < minimum {
                         last_roll = minimum;
                     }
                     rolls.push(last_roll);
                     if fuse > minimum {
                         while last_roll >= fuse {
-                            last_roll = rng.gen_range(1 ..= sides);
+                            last_roll = rng.random_range(1 ..= sides);
                             if last_roll < minimum {
                                 last_roll = minimum;
                             }
