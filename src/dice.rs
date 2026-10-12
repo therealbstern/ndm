@@ -19,7 +19,7 @@ lazy_static! {
     static ref DICE_RE: Regex = Regex::new(r"(?xi)                 # ignore case
         ^
         (?P<count> [1-9]\d*)?d(?P<sides> f|(?: [1-9]\d*))   # NdM/dM/NdF/dF
-        (?:/ (?P<updown> [HL]) (?P<amount> [1-9]\d*))?
+        (?: : (?P<updown> [HL]) (?P<amount> [1-9]\d*))?
         (?P<exploding> ! (?P<fuse> [0-9]+)?)?
         (\? (?P<minimum> [1-9]\d*))?
         $
@@ -57,7 +57,7 @@ impl Eq for DiceParseError {}
 
 impl Display for DiceParseError {
     fn fmt(&self, fmt: &mut Formatter) -> Result<(), FmtError> {
-        write!(fmt, "{:?}", self)
+        write!(fmt, "{self:?}")
     }
 }
 
@@ -508,9 +508,9 @@ pub mod test {
     fn build_vs_new() {
         expect_dice_similar!("1d6", Dice::new_extended(1, 6, 0, 0, 1));
         expect_dice_similar!("1d6!", Dice::new_exploding(1, 6, 6));
-        expect_dice_similar!("1d6/H1", Dice::new_keep_n(1, 6, 1));
-        expect_dice_similar!("1d6/L1", Dice::new_keep_n(1, 6, -1));
-        expect_dice_similar!("1d6/L1!2", Dice::new_extended(1, 6, -1, 2, 1));
+        expect_dice_similar!("1d6:H1", Dice::new_keep_n(1, 6, 1));
+        expect_dice_similar!("1d6:L1", Dice::new_keep_n(1, 6, -1));
+        expect_dice_similar!("1d6:L1!2", Dice::new_extended(1, 6, -1, 2, 1));
         expect_dice_similar!("1d6", Some(Dice { count: 1, sides: 6, fuse: 0, rolls: vec![1], total: 1, keep: 0, minimum: 1 }));
     }
 
@@ -568,40 +568,40 @@ pub mod test {
 
     #[test]
     fn keep_three_high() {
-        let d = "4d6/h3".parse::<Dice>().unwrap();
+        let d = "4d6:h3".parse::<Dice>().unwrap();
         assert_eq!(d.rolls.len(), 4);
         assert_eq!(d.total, d.rolls[1..].to_vec().iter().fold(0, |acc, x| acc + (*x as i32)));
     }
 
     #[test]
     fn keep_three_low() {
-        let d = "4d6/L3".parse::<Dice>().unwrap();
+        let d = "4d6:L3".parse::<Dice>().unwrap();
         assert_eq!(d.rolls.len(), 4);
         assert_eq!(d.total, d.rolls[..3].to_vec().iter().fold(0, |acc, x| acc + (*x as i32)));
     }
 
     #[test]
     fn two_keep_three_bad() {
-        assert_eq!("2d20/H3".parse::<Dice>(), Err(DiceParseError::TooManyKept(3)));
+        assert_eq!("2d20:H3".parse::<Dice>(), Err(DiceParseError::TooManyKept(3)));
     }
 
     #[test]
     fn keep_d1() {
-        assert_eq!("12d1/l3".parse::<Dice>(), Dice::new_keep_n(12, 1, -3));
-        assert_eq!("12d1/h3".parse::<Dice>(), Dice::new_keep_n(12, 1, 3));
+        assert_eq!("12d1:l3".parse::<Dice>(), Dice::new_keep_n(12, 1, -3));
+        assert_eq!("12d1:h3".parse::<Dice>(), Dice::new_keep_n(12, 1, 3));
 
-        let d = "12d1/h3".parse::<Dice>().unwrap();
+        let d = "12d1:h3".parse::<Dice>().unwrap();
         assert_eq!(d.total, 3);
-        let d = "12d1/l3".parse::<Dice>().unwrap();
+        let d = "12d1:l3".parse::<Dice>().unwrap();
         assert_eq!(d.total, 3);
     }
 
     #[test]
     fn keep_df() {
-        expect_dice_similar!("12df/l3", Dice::new_keep_n(12, 0, -3));
-        expect_dice_similar!("12dF/h3", Dice::new_keep_n(12, 0, 3));
+        expect_dice_similar!("12df:l3", Dice::new_keep_n(12, 0, -3));
+        expect_dice_similar!("12dF:h3", Dice::new_keep_n(12, 0, 3));
 
-        let d = "12df/h3".parse::<Dice>().unwrap();
+        let d = "12df:h3".parse::<Dice>().unwrap();
         assert_eq!(d.kept(), 3);
     }
 

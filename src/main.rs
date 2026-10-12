@@ -14,6 +14,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     let mut output = String::new();
     write!(&mut output, "{}", args[1..].join(" ").parse::<RollSet>()?)?;
     let safe = output.replace("\u{2212}", "-").replace("\u{21e8}", "=").replace("\u{00d7}", "x");
-    println!("{}", safe);
+    println!("{safe}");
     Ok(())
 }

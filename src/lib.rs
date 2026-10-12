@@ -71,7 +71,7 @@
 //! use ndm::Dice;
 //!
 //! let wis = Dice::new_keep_n(4, 6, 3);
-//! let dex: Dice = "4d6/H3".parse().unwrap();
+//! let dex: Dice = "4d6:H3".parse().unwrap();
 //! ```
 //!
 //! Or the lowest roll:
@@ -80,7 +80,7 @@
 //! use ndm::Dice;
 //!
 //! let disadvantage = Dice::new_keep_n(2, 20, -1);
-//! let minimum: Dice = "4d7/L1".parse().unwrap();
+//! let minimum: Dice = "4d7:L1".parse().unwrap();
 //! ```
 //!
 //! (String parsing isn't case-sensitive.)
@@ -92,7 +92,7 @@
 //!
 //! let dice = Dice::new_extended(4, 7, 5, 3, 1);
 //! // or (perhaps easier to understand)
-//! let dice = "4d7/H3!5".parse::<Dice>().unwrap();
+//! let dice = "4d7:H3!5".parse::<Dice>().unwrap();
 //! ```
 //!
 //! ### Formatting Dice

@@ -17,8 +17,8 @@ use crate::{Dice, DiceParseError};
 
 lazy_static! {
     // ?x ignores space/comments in the regex, not in the string we're checking
-    static ref PLUS_MINUS_RE: Regex = Regex::new("(?P<op>[-\u{2212}+])").expect("Couldn't compile PLUS_MINUS_RE");
-    static ref TIMES_RE: Regex = Regex::new("(?P<before>[\\d\\s])(?P<op>[*\u{00d7}xX])(?P<after>[\\d\\s])").expect("Couldn't compile TIMES_RE");
+    static ref PLUS_MINUS_DIV_RE: Regex = Regex::new("(?P<op>[-\u{2212}+/\u{00f7}\u{2215}\u{2797}])").expect("Couldn't compile PLUS_MINUS_DIV_RE");
+    static ref TIMES_RE: Regex = Regex::new("(?P<before>[\\d\\s])(?P<op>[*\u{00d7}\u{2a09}xX])(?P<after>[\\d\\s])").expect("Couldn't compile TIMES_RE");
 }
 
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
@@ -28,6 +28,7 @@ enum DiceWords {
     Plus,
     Minus,
     Times,
+    Divides,
     Multiplier(f32),
     Comment(String),
     Other(String),
@@ -37,14 +38,15 @@ enum DiceWords {
 impl Display for DiceWords {
     fn fmt(&self, fmt: &mut Formatter) -> Result<(), FmtError> {
         match self {
-            DiceWords::Dice(d) => write!(fmt, "{}", d),
-            DiceWords::Bonus(d) => write!(fmt, "{}", d),
-            DiceWords::Multiplier(d) => write!(fmt, "{}", d),
+            DiceWords::Dice(d) => write!(fmt, "{d}"),
+            DiceWords::Bonus(d) => write!(fmt, "{d}"),
+            DiceWords::Multiplier(d) => write!(fmt, "{d}"),
             DiceWords::Plus => write!(fmt, "+"),
             DiceWords::Minus => write!(fmt, "\u{2212}"),
             DiceWords::Times => write!(fmt, "\u{00d7}"),
-            DiceWords::Other(s) | DiceWords::Comment(s) => write!(fmt, "|{}|", s),
-            DiceWords::Total(t) => write!(fmt, "= {}", t),
+            DiceWords::Divides => write!(fmt, "\u{2215}"),
+            DiceWords::Other(s) | DiceWords::Comment(s) => write!(fmt, "|{s}|"),
+            DiceWords::Total(t) => write!(fmt, "= {t}"),
         }
     }
 }
@@ -63,8 +65,10 @@ impl FromStr for DiceWords {
             Ok(DiceWords::Plus)
         } else if (line == "-") || (line == "\u{2212}") {
             Ok(DiceWords::Minus)
-        } else if (line == "x") || (line == "X") || (line == "*") || (line == "\u{00d7}") {
+        } else if (line == "x") || (line == "X") || (line == "*") || (line == "\u{00d7}") || (line == "\u{2a09}") {
             Ok(DiceWords::Times)
+        } else if (line == "/") || (line == "\u{00f7}") || (line == "\u{2215}") || (line == "\u{2797}") {
+            Ok(DiceWords::Divides)
         } else if line.starts_with('#') {
             Ok(DiceWords::Comment(line.to_string()))
         } else {
@@ -83,7 +87,7 @@ pub enum RollParseError {
 
 impl Display for RollParseError {
     fn fmt(&self, fmt: &mut Formatter) -> Result<(), FmtError> {
-        write!(fmt, "{:?}", self)
+        write!(fmt, "{self:?}")
     }
 }
 
@@ -131,17 +135,15 @@ pub struct RollSet {
 /// Examples: `x 1.5` or `*2`
 ///
 /// - x, X, and * are accepted
-/// - \x00d7 and \x2a09 aren't accepted and will cause this to be parsed as a
-///   comment
 /// - F is either an integer or a floating point number
-/// - results are rounded down
+/// - results are rounded down, but minumum of 1
 ///
 /// Examples (sample use case in parens)
 /// - `3d8` (roll 3d8)
 /// - `d20lh19!` (roll a keen d20 which explodes, coloring 19s & 20s but not 1s)
 ///   (not implemented)
-/// - `2d20/l` (disadvantage, roll 2d20 but only keep the lower one)
-/// - `4d6/h3` (use a typical method to generate a stat)
+/// - `2d20:l` (disadvantage, roll 2d20 but only keep the lower one)
+/// - `4d6:h3` (use a typical method to generate a stat)
 ///
 /// Longer examples with surrounding modifiers and comments:
 /// - `3d8` bludgeoning (a damage roll)
@@ -152,25 +154,20 @@ pub struct RollSet {
 ///   totalling)
 ///
 /// - The leading plus is optional
-///   - implemented
 ///   - It's normally used to join 2 rolls, but it isn't required
 ///   - Negative rolls aren't parsed as such (the "-" is considered a comment)
 /// - N: the number of dice to roll
-///   - implemented
 ///   - If missing, 1 is assumed
 ///   - An explicit 0 is an error (to avoid interpreting 0d6 as "0" 1d6)
 /// - M: the number of sides
-///   - implemented
 ///   - 0 is an error
 ///   - 1 is legal but largely useless
 ///   - f (or F) means Fate dice
 ///   - If this is missing then the roll can't be parsed as such and will be
 ///     interpreted as a comment
 /// - X: the number of dice to keep
-///   - not implemented
-///   - /hX will mean keep the highest X rolls
-///   - /lX will mean keep the lowest X rolls
-///   - incompatible with `!` (bang)
+///   - :hX will mean keep the highest X rolls
+///   - :lX will mean keep the lowest X rolls
 ///   - X > N is an error
 ///   - X = N is ignored entirely
 ///   - X = 0 is an error
@@ -184,7 +181,6 @@ pub struct RollSet {
 ///   - Fate dice and one-sided dice can't explode
 ///   - exploded dice don't count against the limit per roll (explosions don't
 ///     usually last long anyway)
-
 impl FromStr for RollSet {
     type Err = RollParseError;
 
@@ -193,12 +189,12 @@ impl FromStr for RollSet {
         let mut words = Vec::new();
         let mut roll_found = false;
         let mut total = 0;
-        let pm_repl = PLUS_MINUS_RE.replace_all(line, " $op ");
-        let replaced = TIMES_RE.replace_all(&pm_repl, "$before $op $after");
+        let replaced = PLUS_MINUS_DIV_RE.replace_all(line, " $op ");
+        let replaced = TIMES_RE.replace_all(&replaced, "$before $op $after");
         let mut each = replaced.split_whitespace();
         while let Some(word) = each.next() {
             let parsed = word.parse::<DiceWords>().unwrap();
-            //println!("{}", word);
+            println!("word: {word}, parsed: {parsed:?}");
             match (&last_word, &parsed) {
                 (DiceWords::Dice(_), DiceWords::Dice(_)) | // 3d4 3d4
                 (DiceWords::Dice(_), DiceWords::Multiplier(_)) | // 3d6 4.4
@@ -209,10 +205,12 @@ impl FromStr for RollSet {
                 (DiceWords::Bonus(_), DiceWords::Multiplier(_)) | // 4 4.4
 
                 (DiceWords::Times, DiceWords::Dice(_)) | // * 4d6
+                (DiceWords::Divides, DiceWords::Dice(_)) | // / 4d6
 
                 (DiceWords::Plus, DiceWords::Plus) | // + +
                 (DiceWords::Plus, DiceWords::Minus) | // + -
                 (DiceWords::Plus, DiceWords::Times) | // + *
+                (DiceWords::Plus, DiceWords::Divides) | // + /
                 (DiceWords::Plus, DiceWords::Multiplier(_)) | // + 4.4
                 (DiceWords::Plus, DiceWords::Comment(_)) | // + # foo
                 (DiceWords::Plus, DiceWords::Other(_)) | // + foo // should this be allowed?
@@ -220,6 +218,7 @@ impl FromStr for RollSet {
                 (DiceWords::Minus, DiceWords::Plus) | // - +
                 (DiceWords::Minus, DiceWords::Minus) | // - -
                 (DiceWords::Minus, DiceWords::Times) | // - *
+                (DiceWords::Minus, DiceWords::Divides) | // - /
                 (DiceWords::Minus, DiceWords::Multiplier(_)) | // - 4.4
                 (DiceWords::Minus, DiceWords::Comment(_)) | // - # foo
                 (DiceWords::Minus, DiceWords::Other(_)) | // - foo // should this be allowed?
@@ -227,8 +226,16 @@ impl FromStr for RollSet {
                 (DiceWords::Times, DiceWords::Plus) | // * +
                 (DiceWords::Times, DiceWords::Minus) | // * - (this means * -4 doesn't work)
                 (DiceWords::Times, DiceWords::Times) | // * *
+                (DiceWords::Times, DiceWords::Divides) | // * /
                 (DiceWords::Times, DiceWords::Comment(_)) | // * # foo
                 (DiceWords::Times, DiceWords::Other(_)) | // * foo
+
+                (DiceWords::Divides, DiceWords::Plus) | // / +
+                (DiceWords::Divides, DiceWords::Minus) | // / - (this means / -4 doesn't work)
+                (DiceWords::Divides, DiceWords::Times) | // / *
+                (DiceWords::Divides, DiceWords::Divides) | // / /
+                (DiceWords::Divides, DiceWords::Comment(_)) | // / # foo
+                (DiceWords::Divides, DiceWords::Other(_)) | // / foo
 
                 (DiceWords::Multiplier(_), DiceWords::Dice(_)) | // 4.4 4d6
                 (DiceWords::Multiplier(_), DiceWords::Bonus(_)) | // 4.4 4
@@ -245,21 +252,25 @@ impl FromStr for RollSet {
                 (DiceWords::Dice(_), DiceWords::Plus) | // 4d6 +
                 (DiceWords::Dice(_), DiceWords::Minus) | // 4d6 -
                 (DiceWords::Dice(_), DiceWords::Times) | // 4d6 *
+                (DiceWords::Dice(_), DiceWords::Divides) | // 4d6 /
                 (DiceWords::Dice(_), DiceWords::Other(_)) | // 4d6 fire
 
                 (DiceWords::Bonus(_), DiceWords::Plus) | // 4 +
                 (DiceWords::Bonus(_), DiceWords::Minus) | // 4 -
                 (DiceWords::Bonus(_), DiceWords::Times) | // 4 *
+                (DiceWords::Bonus(_), DiceWords::Divides) | // 4 /
                 (DiceWords::Bonus(_), DiceWords::Other(_)) | // 4 fire
 
                 (DiceWords::Multiplier(_), DiceWords::Plus) | // 4.4 +
                 (DiceWords::Multiplier(_), DiceWords::Minus) | // 4.4 -
                 (DiceWords::Multiplier(_), DiceWords::Times) | // 4.4 *
+                (DiceWords::Multiplier(_), DiceWords::Divides) | // 4.4 /
                 (DiceWords::Multiplier(_), DiceWords::Other(_)) | // 1.5 fire
 
                 (DiceWords::Other(_), DiceWords::Plus) | // fire +
                 (DiceWords::Other(_), DiceWords::Minus) | // fire -
-                (DiceWords::Other(_), DiceWords::Times) // fire *
+                (DiceWords::Other(_), DiceWords::Times) | // fire *
+                (DiceWords::Other(_), DiceWords::Divides) // fire /
                 => {
                     words.push(parsed.clone());
                     last_word = parsed;
@@ -279,12 +290,36 @@ impl FromStr for RollSet {
 
                 (DiceWords::Times, DiceWords::Bonus(b)) => {
                     total *= *b as i32;
+                    if total == 0 {
+                        total = 1;
+                    }
+                    last_word = DiceWords::Multiplier(*b as f32);
+                    words.push(last_word.clone());
+                }
+
+                (DiceWords::Divides, DiceWords::Bonus(b)) => {
+                    total /= *b as i32;
+                    if total == 0 {
+                        total = 1;
+                    }
                     last_word = DiceWords::Multiplier(*b as f32);
                     words.push(last_word.clone());
                 }
 
                 (DiceWords::Times, DiceWords::Multiplier(b)) => {
                     total = (total as f32 * b) as i32;
+                    if total == 0 {
+                        total = 1;
+                    }
+                    words.push(parsed.clone());
+                    last_word = parsed;
+                }
+
+                (DiceWords::Divides, DiceWords::Multiplier(b)) => {
+                    total = (total as f32 / b) as i32;
+                    if total == 0 {
+                        total = 1;
+                    }
                     words.push(parsed.clone());
                     last_word = parsed;
                 }
@@ -320,14 +355,14 @@ impl FromStr for RollSet {
 
                 (DiceWords::Other(t), DiceWords::Other(s)) => { // foo bar
                     words.pop();
-                    last_word = DiceWords::Other(format!("{} {}", t, s));
+                    last_word = DiceWords::Other(format!("{t} {s}"));
                     words.push(last_word.clone());
                 },
             }
         }
         if !roll_found {
             Err(RollParseError::MissingRoll)
-        } else if matches!(last_word, DiceWords::Times | DiceWords::Plus | DiceWords::Minus) {
+        } else if matches!(last_word, DiceWords::Times | DiceWords::Plus | DiceWords::Minus | DiceWords::Divides) {
             Err(RollParseError::InvalidOrder)
         } else {
             //println!("last_word: {:?}", last_word);
@@ -342,7 +377,8 @@ impl FromStr for RollSet {
 
 impl Display for RollSet {
     fn fmt(&self, fmt: &mut Formatter) -> Result<(), FmtError> {
-        write!(fmt, "{}", self.words.iter().map(|w| format!("{}", w)).collect::<Vec<String>>().join(" "))
+        write!(fmt, "{}", self.words.iter().map(|w| format!("{w}"))
+            .collect::<Vec<String>>().join(" "))
     }
 }
 
@@ -776,32 +812,44 @@ mod test {
     #[test]
     fn add_constant_str() {
         let rs = "d1+4".parse::<RollSet>().unwrap();
-        assert_eq!("1d1 [1] + 4 = 5".to_string(), format!("{}", rs));
+        assert_eq!("1d1 [1] + 4 = 5".to_string(), format!("{rs}"));
     }
 
     #[test]
     fn many_rollv_str() {
         let rs = "d1 + 2d1 - 4 to hit".parse::<RollSet>().unwrap();
-        assert_eq!("1d1 [1] + 2d1 [2] \u{2212} 4 |to hit| = -1", format!("{}", rs));
+        assert_eq!("1d1 [1] + 2d1 [2] \u{2212} 4 |to hit| = -1", format!("{rs}"));
     }
 
     #[test]
     fn multiply_even() {
         let rs = "10d1*1.5".parse::<RollSet>().unwrap();
-        assert_eq!("10d1 [10] \u{00d7} 1.5 = 15", format!("{}", rs));
+        assert_eq!("10d1 [10] \u{00d7} 1.5 = 15", format!("{rs}"));
     }
 
     #[test]
     fn multiply_odd() {
         let rs = "11d1*1.5".parse::<RollSet>().unwrap();
-        assert_eq!("11d1 [11] \u{00d7} 1.5 = 16", format!("{}", rs));
+        assert_eq!("11d1 [11] \u{00d7} 1.5 = 16", format!("{rs}"));
     }
 
     #[test]
     fn multiply_ooo() {
         let rs = "1d1*1.5 + 1d1 * 1.5".parse::<RollSet>().unwrap();
-        assert_eq!("1d1 [1] \u{00d7} 1.5 + 1d1 [1] \u{00d7} 1.5 = 3", format!("{}", rs));
+        assert_eq!("1d1 [1] \u{00d7} 1.5 + 1d1 [1] \u{00d7} 1.5 = 3", format!("{rs}"));
         // vs (1 * 1.5 = 1) + (1 * 1.5 = 1) = 2
+    }
+
+    #[test]
+    fn times_zero() {
+        let rs = "1d1*0.5".parse::<RollSet>().unwrap();
+        assert_eq!("1d1 [1] \u{00d7} 0.5 = 1", format!("{rs}"));
+    }
+
+    #[test]
+    fn divides_zero() {
+        let rs = "1d1/2".parse::<RollSet>().unwrap();
+        assert_eq!("1d1 [1] \u{2215} 2 = 1", format!("{rs}"));
     }
 
     #[test]
@@ -814,9 +862,9 @@ mod test {
         let rolls: Result<String, RollParseError> = chatter[1].split(';').try_fold("".to_string(), |acc, x| {
             let rs = x.parse::<RollSet>()?;
             if acc.is_empty() {
-                Ok(format!("rolls {}", rs))
+                Ok(format!("rolls {rs}"))
             } else {
-                Ok(acc + &format!("; {}", rs))
+                Ok(acc + &format!("; {rs}"))
             }
         });
 
@@ -842,10 +890,27 @@ mod test {
     }
 
     #[test]
-    fn ends_with_operator() {
+    fn ends_with_operator_plus() {
         assert!("1d6+".parse::<RollSet>().is_err());
-        assert!("1d6x".parse::<RollSet>().is_err());
+        assert!("1d6 +".parse::<RollSet>().is_err());
+    }
+
+    #[test]
+    fn ends_with_operator_minus() {
         assert!("1d6-".parse::<RollSet>().is_err());
+        assert!("1d6 -".parse::<RollSet>().is_err());
+    }
+
+    #[test]
+    fn ends_with_operator_times() {
+        assert!("1d6x".parse::<RollSet>().is_err());
+        assert!("1d6 x".parse::<RollSet>().is_err());
+    }
+
+    #[test]
+    fn ends_with_operator_divides() {
+        assert!("1d6/".parse::<RollSet>().is_err());
+        assert!("1d6 /".parse::<RollSet>().is_err());
     }
 
     #[test]
@@ -854,13 +919,31 @@ mod test {
     }
 
     #[test]
+    fn multiply_close() {
+        assert_eq!(format!("{}", "4d1x4".parse::<RollSet>().unwrap()), "4d1 [4] \u{00d7} 4 = 16");
+    }
+
+    #[test]
+    fn divides_math() {
+        assert_eq!(format!("{}", "4d1/2".parse::<RollSet>().unwrap()), "4d1 [4] \u{2215} 2 = 2");
+        assert_eq!(format!("{}", "4d1/2.0".parse::<RollSet>().unwrap()), "4d1 [4] \u{2215} 2 = 2");
+    }
+
+    #[test]
     fn times() {
         assert!("1d6x4".parse::<RollSet>().is_ok());
         assert!("1d6X4".parse::<RollSet>().is_ok());
         assert!("1d6*4".parse::<RollSet>().is_ok());
         assert!("1d6\u{00d7}4".parse::<RollSet>().is_ok());
+        assert!("1d6\u{2a09}4".parse::<RollSet>().is_ok());
         assert!("1d6 complex".parse::<RollSet>().is_ok());
-        assert!("1d6 x".parse::<RollSet>().is_err());
-        assert!("1d6x".parse::<RollSet>().is_err());
+    }
+
+    #[test]
+    fn divides() {
+        assert!("1d6/4".parse::<RollSet>().is_ok());
+        assert!("1d6\u{00f7}4".parse::<RollSet>().is_ok());
+        assert!("1d6\u{2215}4".parse::<RollSet>().is_ok());
+        assert!("1d6\u{2797}4".parse::<RollSet>().is_ok());
     }
 }
