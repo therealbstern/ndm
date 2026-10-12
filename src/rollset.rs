@@ -8,18 +8,13 @@ use core::convert::Infallible;
 use std::error::Error;
 use std::fmt::{Display, Debug, Error as FmtError, Formatter};
 use std::str::FromStr;
+use std::sync::LazyLock;
 
 use lazy_static::lazy_static;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 
 use crate::{Dice, DiceParseError};
-
-lazy_static! {
-    // ?x ignores space/comments in the regex, not in the string we're checking
-    static ref PLUS_MINUS_DIV_RE: Regex = Regex::new("(?P<op>[-\u{2212}+/\u{00f7}\u{2215}\u{2797}])").expect("Couldn't compile PLUS_MINUS_DIV_RE");
-    static ref TIMES_RE: Regex = Regex::new("(?P<before>[\\d\\s])(?P<op>[*\u{00d7}\u{2a09}xX])(?P<after>[\\d\\s])").expect("Couldn't compile TIMES_RE");
-}
 
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 enum DiceWords {
@@ -184,7 +179,15 @@ pub struct RollSet {
 impl FromStr for RollSet {
     type Err = RollParseError;
 
+
+lazy_static! {
+    // ?x ignores space/comments in the regex, not in the string we're checking
+}
+
     fn from_str(line: &str) -> Result<Self, Self::Err> {
+        static PLUS_MINUS_DIV_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new("(?P<op>[-\u{2212}+/\u{00f7}\u{2215}\u{2797}])").expect("Couldn't compile PLUS_MINUS_DIV_RE"));
+        static TIMES_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new("(?P<before>[\\d\\s])(?P<op>[*\u{00d7}\u{2a09}xX])(?P<after>[\\d\\s])").expect("Couldn't compile TIMES_RE"));
+
         let mut last_word = DiceWords::Other("".to_string());
         let mut words = Vec::new();
         let mut roll_found = false;

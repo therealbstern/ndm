@@ -8,23 +8,11 @@ use std::convert::TryFrom;
 use std::error::Error;
 use std::fmt::{Display, Debug, Error as FmtError, Formatter};
 use std::str::FromStr;
+use std::sync::LazyLock;
 
-use lazy_static::lazy_static;
 use rand::{rng, Rng};
 use regex::{Captures, Regex};
 use serde::{Deserialize, Serialize};
-
-lazy_static! {
-    // ?x ignores space/comments in the regex, not in the string we're checking
-    static ref DICE_RE: Regex = Regex::new(r"(?xi)                 # ignore case
-        ^
-        (?P<count> [1-9]\d*)?d(?P<sides> f|(?: [1-9]\d*))   # NdM/dM/NdF/dF
-        (?: : (?P<updown> [HL]) (?P<amount> [1-9]\d*))?
-        (?P<exploding> ! (?P<fuse> [0-9]+)?)?
-        (\? (?P<minimum> [1-9]\d*))?
-        $
-        ").expect("Couldn't compile DICE_RE");
-}
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum DiceParseError {
@@ -406,6 +394,16 @@ impl FromStr for Dice {
     type Err = DiceParseError;
 
     fn from_str(line: &str) -> Result<Self, Self::Err> {
+        static DICE_RE: LazyLock<Regex> = LazyLock::new(||
+        Regex::new(r"(?xi)  # ignore case, literla whitespace, and comments
+        ^
+        (?P<count> [1-9]\d*)?d(?P<sides> f|(?: [1-9]\d*))   # NdM/dM/NdF/dF
+        (?: : (?P<updown> [HL]) (?P<amount> [1-9]\d*))?
+        (?P<exploding> ! (?P<fuse> [0-9]+)?)?
+        (\? (?P<minimum> [1-9]\d*))?
+        $
+        ").expect("Couldn't compile DICE_RE"));
+
         let mut caps = DICE_RE.captures_iter(line);
         let word = caps.next().ok_or(DiceParseError::Unparseable)?;
         Dice::try_from(word)
