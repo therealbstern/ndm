@@ -191,7 +191,7 @@ impl FromStr for RollSet {
         let mut each = replaced.split_whitespace();
         while let Some(word) = each.next() {
             let parsed = word.parse::<DiceWords>().unwrap();
-            println!("word: {word}, parsed: {parsed:?}");
+            //println!("word: {word}, parsed: {parsed:?}");
             match (&last_word, &parsed) {
                 (DiceWords::Dice(_), DiceWords::Dice(_)) | // 3d4 3d4
                 (DiceWords::Dice(_), DiceWords::Multiplier(_)) | // 3d6 4.4
