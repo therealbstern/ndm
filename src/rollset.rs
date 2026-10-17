@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 use crate::{Dice, DiceParseError};
 
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
-enum DiceWords {
+pub enum DiceWords {
     Dice(Dice),
     Bonus(u16),
     Plus,
@@ -89,7 +89,7 @@ impl Error for RollParseError {}
 
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub struct RollSet {
-    words: Vec<DiceWords>,
+    pub words: Vec<DiceWords>,
 }
 
 /// In the syntax below, capital letters are variables and lower-case letters
