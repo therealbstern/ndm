@@ -10,7 +10,7 @@ use std::fmt::{Display, Debug, Error as FmtError, Formatter};
 use std::str::FromStr;
 use std::sync::LazyLock;
 
-use rand::{rng, Rng};
+use rand::{rng, RngExt};
 use regex::{Captures, Regex};
 use serde::{Deserialize, Serialize};
 
@@ -224,14 +224,14 @@ impl Dice {
             _ => {
                 rolls = Vec::new();
                 for _ in 0 .. count {
-                    let mut last_roll = rng.random_range(1 ..= sides);
+                    let mut last_roll = rand::random_range(1 ..= sides);
                     if last_roll < minimum {
                         last_roll = minimum;
                     }
                     rolls.push(last_roll);
                     if fuse > minimum {
                         while last_roll >= fuse {
-                            last_roll = rng.random_range(1 ..= sides);
+                            last_roll = rand::random_range(1 ..= sides);
                             if last_roll < minimum {
                                 last_roll = minimum;
                             }
