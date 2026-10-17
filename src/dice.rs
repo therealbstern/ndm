@@ -307,7 +307,7 @@ impl Dice {
     /// Note that neither Fudge/Fate dice nor `d1`s can "explode".
     /// Also note that for one-sided dice, the [count] and the [total] are
     /// usually more useful data.
-    pub fn all_rolls(&self) -> &Vec<u16> { &self.rolls }
+    pub fn all_rolls(&self) -> &[u16] { &self.rolls }
 
     /// The number upon which dice "exploded", triggering a re-roll.
     /// Zero (0) means the dice couldn't explode.
@@ -323,6 +323,16 @@ impl Dice {
 
     /// The number of dice kept when calculating the [total] of this roll.
     pub fn kept(&self) -> isize { self.keep }
+
+    /// The minimum number rollable on the dice.  1 means anything can be
+    /// rolled.  Not valid on Fate dice, which return 0.
+    pub fn minimum(&self) -> u16 {
+        if self.sides > 0 {
+            self.minimum
+        } else {
+            0
+        }
+    }
 
     /// Indicates whether this set of dice is similar to another.  Similar means
     /// both sets of dice have the same number of dice and the same number of
