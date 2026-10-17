@@ -219,4 +219,4 @@ mod dice;
 mod rollset;
 
 pub use dice::{Dice as Dice, DiceParseError as DiceParseError};
-pub use rollset::{RollParseError as RollParseError, RollSet as RollSet};
+pub use rollset::{DiceWords, RollParseError as RollParseError, RollSet as RollSet};
